@@ -1,0 +1,33 @@
+{
+  "name": "@telemedicine/backend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "test": "node --test --test-concurrency=1",
+    "lint": "node --check src/app.js && node --check src/auth.js && node --check src/booking.js && node --check src/db.js && node --check src/server.js",
+    "prisma": "node scripts/prisma.js",
+    "db:generate": "npm run prisma -- generate",
+    "db:migrate": "npm run prisma -- migrate dev",
+    "db:deploy": "npm run prisma -- migrate deploy",
+    "db:seed": "node prisma/seed.js"
+  },
+  "dependencies": {
+    "@prisma/client": "6.2.1",
+    "argon2": "0.41.1",
+    "cors": "2.8.5",
+    "dotenv": "16.4.7",
+    "express": "4.22.3",
+    "express-rate-limit": "7.5.0",
+    "helmet": "8.0.0",
+    "jsonwebtoken": "9.0.2",
+    "pino": "9.6.0",
+    "pino-http": "10.4.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "prisma": "6.2.1",
+    "supertest": "7.0.0"
+  }
+}

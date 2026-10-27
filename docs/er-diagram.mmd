@@ -1,0 +1,256 @@
+erDiagram
+  USER {
+    uuid id PK
+    string email UK
+    string passwordHash
+    string name
+    Role role
+    boolean isActive
+    datetime createdAt
+    datetime updatedAt
+  }
+
+  PATIENT_PROFILE {
+    uuid id PK
+    uuid userId FK, UK
+    string phone
+    datetime birthDate
+    string preferredLanguage
+    string gender
+    string emergencyContact
+    string medicalHistorySummary
+  }
+
+  DOCTOR_PROFILE {
+    uuid id PK
+    uuid userId FK, UK
+    string specialty
+    string bio
+    int consultationFeeMinor
+    boolean verified
+    string qualifications
+    int experienceYears
+    string languages
+    string consultationModes
+    datetime createdAt
+    datetime updatedAt
+  }
+
+  SPECIALTY {
+    uuid id PK
+    string name UK
+    string description
+    boolean isActive
+    datetime createdAt
+  }
+
+  DOCTOR_SPECIALTY {
+    uuid id PK
+    uuid doctorId FK
+    uuid specialtyId FK
+  }
+
+  DOCTOR_CREDENTIAL {
+    uuid id PK
+    uuid doctorId FK
+    string credentialType
+    string issuingAuthority
+    string credentialReference
+    CredentialStatus verificationStatus
+    datetime verificationTimestamp
+    uuid reviewedByAdminId
+    datetime createdAt
+    datetime updatedAt
+  }
+
+  AVAILABILITY_RULE {
+    uuid id PK
+    uuid doctorId FK
+    int dayOfWeek
+    string localTimeZone
+    string startTime
+    string endTime
+    int slotDurationMinutes
+    datetime effectiveStartDate
+    datetime effectiveEndDate
+    boolean isActive
+    datetime createdAt
+  }
+
+  AVAILABILITY_SLOT {
+    uuid id PK
+    uuid doctorId FK
+    datetime startsAt
+    datetime endsAt
+    SlotStatus status
+    datetime createdAt
+  }
+
+  DOCTOR_BLOCKED_PERIOD {
+    uuid id PK
+    uuid doctorId FK
+    datetime startsAt
+    datetime endsAt
+    string reasonCategory
+    uuid createdById
+    datetime createdAt
+  }
+
+  APPOINTMENT {
+    uuid id PK
+    uuid patientId FK
+    uuid doctorId FK
+    uuid slotId FK
+    AppointmentStatus status
+    string mode
+    string reasonForVisit
+    string cancellationReasonCategory
+    uuid rescheduledFromId
+    datetime createdAt
+    datetime updatedAt
+  }
+
+  APPOINTMENT_STATUS_HISTORY {
+    uuid id PK
+    uuid appointmentId FK
+    AppointmentStatus previousStatus
+    AppointmentStatus newStatus
+    uuid actorId
+    string reason
+    datetime timestamp
+  }
+
+  CONSULTATION {
+    uuid id PK
+    uuid appointmentId FK, UK
+    datetime startedAt
+    datetime completedAt
+  }
+
+  CONSULTATION_NOTE {
+    uuid id PK
+    uuid consultationId FK, UK
+    uuid authorId
+    string content
+    int version
+    datetime createdAt
+    datetime updatedAt
+  }
+
+  CONSULTATION_NOTE_HISTORY {
+    uuid id PK
+    uuid noteId FK
+    uuid authorId
+    string content
+    int version
+    datetime createdAt
+  }
+
+  PRESCRIPTION {
+    uuid id PK
+    uuid consultationId FK
+    int version
+    string status
+    datetime issuedAt
+  }
+
+  PRESCRIPTION_ITEM {
+    uuid id PK
+    uuid prescriptionId FK
+    string name
+    string dosage
+    string frequency
+    string duration
+    string route
+    string instructions
+  }
+
+  PRESCRIPTION_AMENDMENT {
+    uuid id PK
+    uuid prescriptionId FK
+    int previousVersion
+    int newVersion
+    uuid amendedById
+    string reason
+    datetime timestamp
+  }
+
+  CONSENT_RECORD {
+    uuid id PK
+    uuid patientId FK
+    string consentType
+    string policyVersion
+    ConsentStatus status
+    datetime recordedAt
+    datetime revokedAt
+    json metadata
+  }
+
+  REFRESH_TOKEN {
+    uuid id PK
+    uuid userId FK
+    string tokenHash UK
+    datetime expiresAt
+    datetime revokedAt
+    datetime createdAt
+  }
+
+  IDEMPOTENCY_RECORD {
+    uuid id PK
+    uuid actorId FK
+    string key
+    string scope
+    string fingerprint
+    json response
+    int statusCode
+    datetime createdAt
+  }
+
+  AUDIT_LOG {
+    uuid id PK
+    uuid actorId FK
+    string action
+    string resourceType
+    string resourceId
+    string outcome
+    string correlationId
+    json metadata
+    datetime createdAt
+  }
+
+  NOTIFICATION {
+    uuid id PK
+    uuid userId FK
+    string type
+    string title
+    string message
+    datetime readAt
+    datetime createdAt
+  }
+
+  USER ||--o| PATIENT_PROFILE : has
+  USER ||--o| DOCTOR_PROFILE : has
+  USER ||--o{ REFRESH_TOKEN : authenticates
+  USER ||--o{ APPOINTMENT : patient_for
+  USER ||--o{ APPOINTMENT : doctor_for
+  USER ||--o{ CONSENT_RECORD : signs
+  USER ||--o{ IDEMPOTENCY_RECORD : generates
+  USER ||--o{ AUDIT_LOG : initiates
+  USER ||--o{ NOTIFICATION : receives
+
+  DOCTOR_PROFILE ||--o{ DOCTOR_SPECIALTY : specializes_in
+  SPECIALTY ||--o{ DOCTOR_SPECIALTY : classifies
+  DOCTOR_PROFILE ||--o{ DOCTOR_CREDENTIAL : verified_by
+  DOCTOR_PROFILE ||--o{ AVAILABILITY_RULE : defines
+  DOCTOR_PROFILE ||--o{ AVAILABILITY_SLOT : offers
+  DOCTOR_PROFILE ||--o{ DOCTOR_BLOCKED_PERIOD : blocks
+
+  AVAILABILITY_SLOT ||--o{ APPOINTMENT : books
+  APPOINTMENT ||--o{ APPOINTMENT_STATUS_HISTORY : tracks_state
+  APPOINTMENT ||--o| CONSULTATION : conducts
+
+  CONSULTATION ||--o| CONSULTATION_NOTE : records
+  CONSULTATION_NOTE ||--o{ CONSULTATION_NOTE_HISTORY : archives_versions
+  CONSULTATION ||--o{ PRESCRIPTION : issues
+  PRESCRIPTION ||--o{ PRESCRIPTION_ITEM : specifies
+  PRESCRIPTION ||--o{ PRESCRIPTION_AMENDMENT : audits_revisions

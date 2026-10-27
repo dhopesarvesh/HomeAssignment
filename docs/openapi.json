@@ -1,0 +1,271 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "CarePath Telemedicine Platform API",
+    "version": "1.1.0",
+    "description": "Production-grade, modular monolith REST API for CarePath Ayurvedic Telemedicine. Implements patient identity, doctor credentialing, atomic scheduling with serializable concurrency, clinical consultation lifecycle, prescription amendments, in-app notifications, and administrative governance."
+  },
+  "servers": [
+    { "url": "http://localhost:3000/api/v1", "description": "Local development server" }
+  ],
+  "paths": {
+    "/auth/register": {
+      "post": {
+        "summary": "Register as patient",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password", "name"],
+                "properties": {
+                  "email": { "type": "string", "format": "email" },
+                  "password": { "type": "string", "minLength": 12 },
+                  "name": { "type": "string" },
+                  "phone": { "type": "string" },
+                  "preferredLanguage": { "type": "string", "default": "en" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Patient account created with JWT and refresh token" },
+          "400": { "description": "Validation error" },
+          "409": { "description": "Email already registered" }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "summary": "Sign in",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": { "type": "string", "format": "email" },
+                  "password": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Authentication successful" },
+          "401": { "description": "Invalid credentials or inactive account" }
+        }
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "summary": "Rotate refresh token session",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["refreshToken"],
+                "properties": { "refreshToken": { "type": "string" } }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Token rotated successfully" },
+          "401": { "description": "Invalid or revoked token" }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "summary": "Revoke session",
+        "responses": { "204": { "description": "Session revoked" } }
+      }
+    },
+    "/specialties": {
+      "get": {
+        "summary": "List active specialties",
+        "responses": { "200": { "description": "Specialties catalog" } }
+      }
+    },
+    "/doctors": {
+      "get": {
+        "summary": "Search verified doctors with filters",
+        "parameters": [
+          { "name": "q", "in": "query", "schema": { "type": "string" } },
+          { "name": "specialty", "in": "query", "schema": { "type": "string" } },
+          { "name": "mode", "in": "query", "schema": { "type": "string", "enum": ["ONLINE", "IN_PERSON", "ALL"] } },
+          { "name": "language", "in": "query", "schema": { "type": "string" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } }
+        ],
+        "responses": { "200": { "description": "List of matching doctor profiles" } }
+      }
+    },
+    "/doctors/{doctorId}": {
+      "get": {
+        "summary": "Get doctor public profile",
+        "parameters": [{ "name": "doctorId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": { "200": { "description": "Doctor profile" }, "404": { "description": "Not found" } }
+      }
+    },
+    "/doctors/{doctorId}/slots": {
+      "get": {
+        "summary": "List future available slots",
+        "parameters": [{ "name": "doctorId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": { "200": { "description": "Available future slots" } }
+      }
+    },
+    "/appointments": {
+      "get": {
+        "summary": "List user appointments",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Scoped user appointments" } }
+      },
+      "post": {
+        "summary": "Book appointment",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["slotId"],
+                "properties": {
+                  "slotId": { "type": "string", "format": "uuid" },
+                  "mode": { "type": "string", "enum": ["ONLINE", "IN_PERSON"], "default": "ONLINE" },
+                  "reasonForVisit": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Appointment created" },
+          "200": { "description": "Idempotent replay" },
+          "409": { "description": "Slot no longer available or idempotency conflict" }
+        }
+      }
+    },
+    "/appointments/{id}/cancel": {
+      "post": {
+        "summary": "Cancel appointment",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": { "200": { "description": "Cancelled and slot restored" }, "409": { "description": "Not cancellable" } }
+      }
+    },
+    "/appointments/{id}/reschedule": {
+      "post": {
+        "summary": "Reschedule appointment to alternative slot",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["newSlotId"],
+                "properties": {
+                  "newSlotId": { "type": "string", "format": "uuid" },
+                  "reason": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Rescheduled" }, "409": { "description": "New slot unavailable" } }
+      }
+    },
+    "/consultations": {
+      "get": {
+        "summary": "List consultations",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Scoped consultations with notes and prescriptions" } }
+      }
+    },
+    "/consultations/{consultationId}/start": {
+      "post": {
+        "summary": "Start consultation",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Started" }, "409": { "description": "Invalid state transition" } }
+      }
+    },
+    "/consultations/{consultationId}/complete": {
+      "post": {
+        "summary": "Complete consultation",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Completed" }, "409": { "description": "Invalid state transition" } }
+      }
+    },
+    "/consultations/{consultationId}/notes": {
+      "post": {
+        "summary": "Save or amend clinical note",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "201": { "description": "Note version saved and prior archived" } }
+      }
+    },
+    "/consultations/{consultationId}/prescriptions": {
+      "post": {
+        "summary": "Issue prescription",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "201": { "description": "Prescription issued" } }
+      }
+    },
+    "/prescriptions/{prescriptionId}/amendments": {
+      "post": {
+        "summary": "Amend prescription version",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "201": { "description": "New prescription version issued with amendment audit" } }
+      }
+    },
+    "/notifications": {
+      "get": {
+        "summary": "Get user notifications",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "User notifications and unread count" } }
+      }
+    },
+    "/admin/analytics/overview": {
+      "get": {
+        "summary": "Administrative KPI overview",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Real aggregate statistics" }, "403": { "description": "Forbidden" } }
+      }
+    },
+    "/admin/verification-queue": {
+      "get": {
+        "summary": "Doctor verification queue",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Pending doctor applications" } }
+      }
+    },
+    "/doctors/{doctorId}/verify": {
+      "post": {
+        "summary": "Approve or reject doctor verification",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Doctor verification status updated" } }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  }
+}

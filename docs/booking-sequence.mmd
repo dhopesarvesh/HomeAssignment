@@ -1,0 +1,51 @@
+sequenceDiagram
+  autonumber
+  actor Patient as Patient (Browser)
+  participant API as CarePath API Router
+  participant Auth as Auth & Context Middleware
+  participant Booking as Booking Service
+  participant DB as PostgreSQL (Prisma)
+  participant Notification as Notification Center
+
+  Patient->>API: POST /api/v1/appointments<br/>(Header: Idempotency-Key: <UUID>)<br/>Body: { slotId, mode, reasonForVisit }
+  API->>Auth: Verify JWT Bearer Token & Active User
+  Auth-->>API: Authenticated Actor (Role: PATIENT)
+
+  API->>Booking: book({ actor, key, body })
+  Booking->>DB: Check IdempotencyRecord (actorId, key, scope)
+  
+  alt Idempotency Key Exists (Replay)
+    DB-->>Booking: Existing Record Found
+    alt Fingerprint Matches
+      Booking-->>API: Return Cached Response (HTTP 200, replay: true)
+      API-->>Patient: Return Appointment Data
+    else Fingerprint Mismatch
+      Booking-->>API: Throw Conflict (HTTP 409)
+      API-->>Patient: 409 Conflict: Key used with different request
+    end
+  else New Booking Request
+    Booking->>DB: BEGIN TRANSACTION (ISOLATION LEVEL SERIALIZABLE)
+    Booking->>DB: UPDATE "AvailabilitySlot"<br/>SET status = 'BOOKED'<br/>WHERE id = slotId AND status = 'AVAILABLE'<br/>RETURNING id, doctorId, startsAt
+    
+    alt Slot is Already Booked or Non-Existent
+      DB-->>Booking: 0 rows affected
+      Booking->>DB: ROLLBACK
+      Booking-->>API: Throw Conflict (HTTP 409: Slot no longer available)
+      API-->>Patient: 409 Conflict
+    else Slot Successfully Claimed
+      DB-->>Booking: Slot Claimed (Row Returned)
+      Booking->>DB: Verify Doctor is Verified and Active
+      DB-->>Booking: Doctor Verified
+      Booking->>DB: INSERT INTO "Appointment"<br/>(patientId, doctorId, slotId, mode, reason, status: 'BOOKED')
+      DB-->>Booking: Appointment Created
+      Booking->>DB: INSERT INTO "AppointmentStatusHistory"<br/>(status: 'BOOKED', reason: 'Initial booking created')
+      Booking->>DB: INSERT INTO "Consultation"<br/>(appointmentId)
+      Booking->>DB: INSERT INTO "IdempotencyRecord"<br/>(actorId, key, fingerprint, response)
+      Booking->>DB: INSERT INTO "AuditLog"<br/>(action: 'appointment.booked', resourceId)
+      Booking->>DB: INSERT INTO "Notification"<br/>(Patient confirmation & Doctor alert)
+      Booking->>DB: COMMIT TRANSACTION
+      DB-->>Booking: Transaction Committed
+      Booking-->>API: Return Created Appointment (HTTP 201, replay: false)
+      API-->>Patient: 201 Created: Appointment & Consultation placeholder
+    end
+  end

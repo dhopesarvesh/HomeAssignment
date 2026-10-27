@@ -1,0 +1,40 @@
+name: CI
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: telemedicine
+          POSTGRES_USER: telemedicine
+          POSTGRES_PASSWORD: telemedicine
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U telemedicine -d telemedicine"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://telemedicine:telemedicine@localhost:5432/telemedicine?schema=public
+      JWT_ACCESS_SECRET: ci-access-token-secret-at-least-32-characters-long
+      JWT_REFRESH_SECRET: ci-refresh-token-secret-at-least-32-characters-long
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run db:generate
+      - run: npm run db:deploy
+      - run: RUN_DB_INTEGRATION=1 npm test
+      - run: npm run lint
+      - run: npm run build -w frontend
+      - run: npm audit
+      - run: docker build -f backend/Dockerfile -t carepath-api .
+      - run: docker build -f frontend/Dockerfile -t carepath-web .

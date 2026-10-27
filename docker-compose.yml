@@ -1,0 +1,48 @@
+services:
+  postgres:
+    image: postgres:16.6-alpine
+    environment:
+      POSTGRES_DB: telemedicine
+      POSTGRES_USER: telemedicine
+      POSTGRES_PASSWORD: telemedicine
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U telemedicine -d telemedicine"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://telemedicine:telemedicine@postgres:5432/telemedicine?schema=public
+      API_PORT: 3000
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:5174}
+    ports:
+      - "${API_EXTERNAL_PORT:-3001}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: sh -c "npm run db:deploy -w backend && npm run db:seed -w backend && npm run start -w backend"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3001/api/v1}
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:3001/api/v1}
+    ports:
+      - "${FRONTEND_PORT:-5174}:80"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
